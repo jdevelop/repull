@@ -2,18 +2,12 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"flag"
+	"fmt"
 	"os"
-	"strings"
 
-	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
-	"github.com/docker/docker/pkg/jsonmessage"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -25,7 +19,8 @@ var (
 func main() {
 	flag.Parse()
 	if len(flag.Args()) == 0 {
-		flag.Usage()
+		fmt.Println("Usage: " + os.Args[0] + " [flags] containerId1 containerName2 ... containerNameN")
+		flag.PrintDefaults()
 		os.Exit(1)
 	}
 
@@ -75,77 +70,6 @@ func main() {
 			continue
 		}
 	}
-}
-
-func restart(ctx context.Context, cli *client.Client, inspected *types.ContainerJSON, imageId string) error {
-	log.Debugf("killing container %s", imageString(inspected))
-	if err := cli.ContainerKill(ctx, inspected.ID, "sigkill"); err != nil {
-		return errors.Wrapf(err, "can't kill container %s", imageString(inspected))
-	}
-	if _, err := cli.ContainerWait(ctx, inspected.ID); err != nil {
-		return errors.Wrapf(err, "can't get the container status %s", imageString(inspected))
-	}
-	log.Debugf("removing container %s", imageString(inspected))
-	if err := cli.ContainerRemove(ctx, inspected.ID, types.ContainerRemoveOptions{}); err != nil {
-		return errors.Wrapf(err, "can't remove container %s", imageString(inspected))
-	}
-	log.Debugf("replacing image %s with %s", inspected.Config.Image, imageId)
-	newC, err := cli.ContainerCreate(ctx, inspected.Config, inspected.HostConfig, &network.NetworkingConfig{
-		EndpointsConfig: inspected.NetworkSettings.Networks,
-	}, inspected.Name)
-	if err != nil {
-		return errors.Wrapf(err, "can't create container %s", imageString(inspected))
-	}
-	if err := cli.ContainerStart(ctx, newC.ID, types.ContainerStartOptions{}); err != nil {
-		return errors.Wrapf(err, "can't statr new container %s", newC.ID)
-	}
-	log.Infof("started container %s", newC.ID)
-	return nil
-}
-
-func pull(ctx context.Context, cli *client.Client, c *types.Container) (string, error) {
-	log.Debugf("pulling image %s", c.Image)
-	distributionRef, err := reference.ParseNormalizedNamed(c.Image)
-	switch {
-	case err != nil:
-		return "", errors.Wrapf(err, "can't parse image '%s'", c.Image)
-	case reference.IsNameOnly(distributionRef):
-		distributionRef = reference.TagNameOnly(distributionRef)
-		if tagged, ok := distributionRef.(reference.Tagged); ok {
-			log.Infof("using default tag: %s\n", tagged.Tag())
-		}
-	}
-	auth, err := findDefaultAuth(distributionRef)
-	if err != nil {
-		return "", errors.Wrapf(err, "can't fetch auth for %s", distributionRef.String())
-	}
-	var regAuth string
-	if auth != nil {
-		encodedJSON, err := json.Marshal(auth)
-		if err != nil {
-			return "", err
-		}
-		regAuth = base64.URLEncoding.EncodeToString(encodedJSON)
-	}
-	var imageId string
-	if r, err := cli.ImagePull(context.Background(), distributionRef.String(), types.ImagePullOptions{
-		RegistryAuth: regAuth,
-	}); err != nil {
-		return "", errors.Wrapf(err, "can't pull image %s", distributionRef.String())
-	} else {
-		var jm jsonmessage.JSONMessage
-		dec := json.NewDecoder(r)
-		defer r.Close()
-		for {
-			if err := dec.Decode(&jm); err != nil {
-				break
-			}
-			if strings.HasPrefix(jm.Status, "Digest: sha256:") {
-				imageId = jm.Status[8:]
-			}
-		}
-	}
-	return imageId, nil
 }
 
 func findByName(include map[string]struct{}, c types.Container) bool {
