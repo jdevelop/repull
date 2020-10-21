@@ -51,13 +51,19 @@ func main() {
 	ctx := context.Background()
 	for _, container := range containers {
 		pullRestart := func() {
-			log.Debugf("Pulling container %s", imageString(&container))
+			log.Debugf("inspecting container %s", container.ID)
+			inspected, err := cli.ContainerInspect(ctx, container.ID)
+			if err != nil {
+				log.WithError(err).Errorf("can't inspect container %s", container.ID)
+				return
+			}
+			log.Debugf("pulling a new image for container %s", imageString(&inspected))
 			if imageId, err := pull(ctx, cli, &container); err != nil {
-				log.WithError(err).Errorf("can't pull/restart container %s", imageString(&container))
+				log.WithError(err).Errorf("can't pull/restart container %s", imageString(&inspected))
 			} else {
-				log.Infof("Received image id: %s", imageId)
-				if err := restart(ctx, cli, &container, imageId); err != nil {
-					log.WithError(err).Errorf("can't restart container %s", imageString(&container))
+				log.Infof("received image id: %s", imageId)
+				if err := restart(ctx, cli, &inspected, imageId); err != nil {
+					log.WithError(err).Errorf("can't restart container %s", imageString(&inspected))
 				}
 			}
 		}
@@ -71,25 +77,24 @@ func main() {
 	}
 }
 
-func restart(ctx context.Context, cli *client.Client, c *types.Container, imageId string) error {
-	inspected, err := cli.ContainerInspect(ctx, c.ID)
-	if err != nil {
-		return errors.Wrapf(err, "can't inspect container %s", imageString(c))
+func restart(ctx context.Context, cli *client.Client, inspected *types.ContainerJSON, imageId string) error {
+	log.Debugf("killing container %s", imageString(inspected))
+	if err := cli.ContainerKill(ctx, inspected.ID, "sigkill"); err != nil {
+		return errors.Wrapf(err, "can't kill container %s", imageString(inspected))
 	}
-	log.Debugf("killing container %s", imageString(c))
-	if err := cli.ContainerKill(ctx, c.ID, "sigkill"); err != nil {
-		return errors.Wrapf(err, "can't kill container %s", imageString(c))
+	if _, err := cli.ContainerWait(ctx, inspected.ID); err != nil {
+		return errors.Wrapf(err, "can't get the container status %s", imageString(inspected))
 	}
-	log.Debugf("removing container %s", imageString(c))
-	if err := cli.ContainerRemove(ctx, c.ID, types.ContainerRemoveOptions{}); err != nil {
-		return errors.Wrapf(err, "can't remove container %s", imageString(c))
+	log.Debugf("removing container %s", imageString(inspected))
+	if err := cli.ContainerRemove(ctx, inspected.ID, types.ContainerRemoveOptions{}); err != nil {
+		return errors.Wrapf(err, "can't remove container %s", imageString(inspected))
 	}
 	log.Debugf("replacing image %s with %s", inspected.Config.Image, imageId)
 	newC, err := cli.ContainerCreate(ctx, inspected.Config, inspected.HostConfig, &network.NetworkingConfig{
-		EndpointsConfig: c.NetworkSettings.Networks,
-	}, c.Names[0])
+		EndpointsConfig: inspected.NetworkSettings.Networks,
+	}, inspected.Name)
 	if err != nil {
-		return errors.Wrapf(err, "can't create container %s", imageString(c))
+		return errors.Wrapf(err, "can't create container %s", imageString(inspected))
 	}
 	if err := cli.ContainerStart(ctx, newC.ID, types.ContainerStartOptions{}); err != nil {
 		return errors.Wrapf(err, "can't statr new container %s", newC.ID)
@@ -99,6 +104,7 @@ func restart(ctx context.Context, cli *client.Client, c *types.Container, imageI
 }
 
 func pull(ctx context.Context, cli *client.Client, c *types.Container) (string, error) {
+	log.Debugf("pulling image %s", c.Image)
 	distributionRef, err := reference.ParseNormalizedNamed(c.Image)
 	switch {
 	case err != nil:
@@ -151,6 +157,6 @@ func findByName(include map[string]struct{}, c types.Container) bool {
 	return false
 }
 
-func imageString(c *types.Container) string {
-	return c.ID + " : [" + strings.Join(c.Names, ",") + "]"
+func imageString(c *types.ContainerJSON) string {
+	return c.ID + " : [" + c.Name + "]"
 }
