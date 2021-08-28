@@ -12,10 +12,10 @@ func TestAuthParse(t *testing.T) {
 {
 	"auths": {
 		"16371954.dkr.ecr.us-east-1.amazonaws.com": {
-			"auth": "aaaaa"
+			"auth": "YWFhOmFhYQo="
 		},
 		"docker.io": {
-			"auth": "yyyyyyy"
+			"auth": "eXl5Onl5eQo="
 		}
 	},
 	"HttpHeaders": {
@@ -27,13 +27,16 @@ func TestAuthParse(t *testing.T) {
 		ref      string
 		expected string
 	}{
-		{ref: "16371954.dkr.ecr.us-east-1.amazonaws.com/user/project/server", expected: "aaaaa"},
-		{ref: "user/project/server", expected: "yyyyyyy"},
+		{ref: "16371954.dkr.ecr.us-east-1.amazonaws.com/user/project/server", expected: "aaa"},
+		{ref: "user/project/server", expected: "yyy"},
 	} {
 		named, err := reference.ParseAnyReference(tst.ref)
 		require.NoError(t, err)
 		t.Logf("Reference: +%v", named)
-		authKey := parseDefaultAuth(named, []byte(auth))
-		require.Equal(t, tst.expected, authKey)
+		authKey, err := parseDefaultAuth(named, []byte(auth))
+		if err != nil {
+			require.Fail(t, err.Error())
+		}
+		require.Equal(t, tst.expected, authKey.Username)
 	}
 }

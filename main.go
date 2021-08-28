@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
@@ -32,7 +33,7 @@ func main() {
 	for _, incl := range os.Args[1:] {
 		include[incl] = struct{}{}
 	}
-	cli, err := client.NewEnvClient()
+	cli, err := client.NewClientWithOpts()
 	if err != nil {
 		log.WithError(err).Fatal("can't create docker client")
 	}
@@ -43,7 +44,8 @@ func main() {
 	if err != nil {
 		log.WithError(err).Fatalf("can't list containers")
 	}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	for _, container := range containers {
 		pullRestart := func() {
 			log.Debugf("inspecting container %s", container.ID)
