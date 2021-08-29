@@ -15,7 +15,7 @@ import (
 var (
 	log     = logrus.NewEntry(logrus.New())
 	verbose = flag.Bool("v", false, "verbose")
-	timeout = flag.Int("t", 5, "timeout")
+	timeout = flag.Int("t", 5, "timeout (seconds)")
 )
 
 func main() {
