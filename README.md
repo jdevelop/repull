@@ -35,6 +35,7 @@ It will
 ```
 ./repull -h
 Usage of ./repull:
+  -t int
+        timeout (default 5)
   -v    verbose
-
 ```
