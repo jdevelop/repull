@@ -15,6 +15,7 @@ import (
 var (
 	log     = logrus.NewEntry(logrus.New())
 	verbose = flag.Bool("v", false, "verbose")
+	timeout = flag.Int("t", 5, "timeout")
 )
 
 func main() {
@@ -44,7 +45,7 @@ func main() {
 	if err != nil {
 		log.WithError(err).Fatalf("can't list containers")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(*timeout))
 	defer cancel()
 	for _, container := range containers {
 		pullRestart := func() {
