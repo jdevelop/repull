@@ -31,13 +31,12 @@ It will
 8. start the new container with the newest image available **preserving all configuration/startup options**
 9. repeat for all images passed in the arguments.
 
-## Install and Run from Docker Hub
+## Install and Run from Github Content Repository
 ```
- $ docker pull jdevelop/repull
  $ docker run      \
    -v /var/run/docker.sock:/var/run/docker.sock  \
    -v $HOME/.docker/config.json:/.docker/config.json   \
-   jdevelop/repull CONTAINER_NAME
+   ghcr.io/jdevelop/repull:latest CONTAINER_NAME1 CONTAINER_NAME2 ... CONTAINER_NAMEN
 ```
 
 ## Install and Run from Source (requires go)
@@ -51,6 +50,6 @@ $ repull -h
 ./repull -h
 Usage of ./repull:
   -t int
-        timeout (default 5)
+        timeout (seconds) (default 5)
   -v    verbose
 ```
